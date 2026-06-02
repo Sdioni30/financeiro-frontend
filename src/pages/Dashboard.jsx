@@ -20,10 +20,10 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const [tRes, sRes] = await Promise.all([
-        api.get(`/api/transacoes/listar?page=${p}`),
+        api.get(`/api/transacoes/listar?page=${p}&categoria=${categoria}`),
         api.get(`/api/transacoes/saldo/${categoria}`),
       ])
-      setTransacoes(tRes.data.content.filter((t) => t.categoria === categoria))
+      setTransacoes(tRes.data.content)
       setTotalPages(tRes.data.totalPages)
       setSaldo(sRes.data)
     } finally {
