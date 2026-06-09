@@ -1,22 +1,57 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import {
+  RiArrowUpLine,
+  RiArrowDownLine,
+  RiDeleteBin6Line,
+  RiLogoutBoxLine,
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
+  RiDownload2Line,
+  RiWalletLine,
+  RiAddLine,
+  RiUserLine,
+  RiBriefcaseLine,
+  RiBarChartBoxLine,
+  RiCalendarLine,
+} from 'react-icons/ri'
 import api from '../api'
+
+const PAGE_SIZE = 6
 
 export default function Dashboard() {
   const { logout } = useAuth()
   const [categoria, setCategoria] = useState('PESSOAL')
   const [transacoes, setTransacoes] = useState([])
   const [saldo, setSaldo] = useState(0)
+  const [entradas, setEntradas] = useState(0)
+  const [saidas, setSaidas] = useState(0)
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
 
-  // form
   const [descricao, setDescricao] = useState('')
-  const [valor, setValor] = useState('')
+  const [valorCentavos, setValorCentavos] = useState(0)
   const [tipo, setTipo] = useState('ENTRADA')
 
-  const carregar = async (p = page) => {
+  const valorDisplay = (valorCentavos / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+  const handleValorKeyDown = (e) => {
+    if (e.key === 'Backspace') {
+      setValorCentavos((v) => Math.floor(v / 10))
+      return
+    }
+    if (!/^\d$/.test(e.key)) return
+    setValorCentavos((v) => {
+      const novo = v * 10 + parseInt(e.key)
+      return novo > 9999999 ? v : novo
+    })
+  }
+
+  const carregar = async (p = 0) => {
     setLoading(true)
     try {
       const [tRes, sRes] = await Promise.all([
@@ -25,25 +60,32 @@ export default function Dashboard() {
       ])
       setTransacoes(tRes.data.content)
       setTotalPages(tRes.data.totalPages)
+      const totalEnt = tRes.data.content.filter(t => t.tipo === 'ENTRADA').reduce((a, t) => a + t.valor, 0)
+      const totalSai = tRes.data.content.filter(t => t.tipo === 'SAIDA').reduce((a, t) => a + t.valor, 0)
+      setEntradas(totalEnt)
+      setSaidas(totalSai)
       setSaldo(sRes.data)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { setPage(0); carregar(0) }, [categoria])
+  useEffect(() => {
+    setPage(0)
+    carregar(0)
+  }, [categoria])
 
   const adicionar = async (e) => {
     e.preventDefault()
-    if (!descricao || !valor) return
+    if (!descricao || valorCentavos === 0) return
     await api.post('/api/transacoes', {
       descricao,
-      valor: parseFloat(valor),
+      valor: valorCentavos / 100,
       tipo,
       categoria,
     })
     setDescricao('')
-    setValor('')
+    setValorCentavos(0)
     setTipo('ENTRADA')
     setPage(0)
     carregar(0)
@@ -70,171 +112,264 @@ export default function Dashboard() {
     URL.revokeObjectURL(url)
   }
 
-  const formatar = (v) =>
-    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const mudarPagina = async (novaPagina) => {
+    setPage(novaPagina)
+    await carregar(novaPagina)
+  }
+
+  const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+  const progressoSaidas = entradas > 0 ? Math.min((saidas / entradas) * 100, 100) : 0
+
+  const totalFiltrado = totalPages * PAGE_SIZE
 
   return (
-    <div className="min-h-screen bg-black">
-      <header className="bg-zinc-900 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-4 relative flex items-center justify-center">
-          <h1 className="text-xl font-bold text-white">Controle Financeiro</h1>
-          <div className="absolute right-4 flex items-center gap-4">
-            <button onClick={logout} className="text-sm text-zinc-400 hover:text-white">
-              Sair
-            </button>
+    <div className="min-h-screen bg-[#09090b]">
+
+      {/* Header */}
+      <header className="border-b border-white/5 bg-[#09090b]/80 backdrop-blur-sm sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <RiWalletLine className="text-white text-sm" />
+            </div>
+            <span className="font-semibold text-white tracking-tight">Financeiro</span>
           </div>
+
+          <div className="flex items-center gap-1 bg-zinc-900/80 border border-white/5 p-1 rounded-xl">
+            {[
+              { key: 'PESSOAL', label: 'Pessoal', Icon: RiUserLine },
+              { key: 'PROFISSIONAL', label: 'Profissional', Icon: RiBriefcaseLine },
+            ].map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => setCategoria(key)}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${categoria === key
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5'
+                  }`}
+              >
+                <Icon className="text-base" />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 text-sm text-zinc-500 hover:text-white transition-colors px-3 py-1.5 rounded-lg hover:bg-white/5"
+          >
+            <RiLogoutBoxLine />
+            Sair
+          </button>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Toggle de categoria */}
-        <div className="flex gap-2 bg-zinc-900 p-1 rounded-xl shadow-sm w-fit">
-          {['PESSOAL', 'PROFISSIONAL'].map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategoria(c)}
-              className={`px-5 py-2 rounded-lg font-medium transition ${
-                categoria === c
-                  ? 'bg-zinc-600 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800'
-              }`}
-            >
-              {c === 'PESSOAL' ? 'Pessoal' : 'Profissional'}
-            </button>
-          ))}
-        </div>
+      <main className="max-w-7xl mx-auto px-6 py-8 space-y-6">
 
-        {/* Card de saldo */}
-        <div className="bg-gradient-to-br from-zinc-700 to-zinc-800 rounded-2xl p-6 text-white shadow-lg">
-          <p className="text-zinc-300 text-sm font-medium">Saldo atual</p>
-          <p className={`text-4xl font-bold mt-2 ${saldo < 0 ? 'text-red-200' : ''}`}>
-            {formatar(saldo)}
-          </p>
-        </div>
+        {/* Cards de resumo */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Form adicionar */}
-          <form onSubmit={adicionar} className="bg-white p-6 rounded-2xl shadow-sm space-y-4">
-            <input
-              type="text"
-              placeholder="Descrição do ítem"
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
-            />
-
-            <input
-              type="number"
-              step="0.01"
-              placeholder="Valor do ítem"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              required
-            />
-
-            <div className="flex gap-2">
-              {['ENTRADA', 'SAIDA'].map((t) => (
-                <button
-                  type="button"
-                  key={t}
-                  onClick={() => setTipo(t)}
-                  className={`flex-1 py-2 rounded-lg border font-medium transition ${
-                    tipo === t
-                      ? t === 'ENTRADA'
-                        ? 'bg-green-600 text-white border-green-600'
-                        : 'bg-red-600 text-white border-red-600'
-                      : t === 'SAIDA'
-                        ? 'bg-red-100 text-red-600 border-red-300 hover:bg-red-200'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  {t === 'ENTRADA' ? 'Entrada' : 'Saída'}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-zinc-600 text-white font-semibold py-2 rounded-lg hover:bg-zinc-500 transition"
-            >
-              Adicionar
-            </button>
-          </form>
-
-          {/* Lista de transações */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-semibold text-slate-800">Histórico</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => exportar('ENTRADA')}
-                  className="text-sm bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition"
-                >
-                  ↓ Entradas
-                </button>
-                <button
-                  onClick={() => exportar('SAIDA')}
-                  className="text-sm bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition"
-                >
-                  ↓ Saídas
-                </button>
+          {/* Saldo */}
+          <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-indigo-950/60 to-zinc-900/60 p-6">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-600/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            <div className="relative">
+              <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium uppercase tracking-widest mb-3">
+                <RiBarChartBoxLine />
+                Saldo atual
               </div>
+              <p className={`text-4xl font-bold tracking-tight ${saldo < 0 ? 'text-red-400' : 'text-white'}`}>
+                {fmt(saldo)}
+              </p>
+              <p className="mt-2 text-xs text-zinc-600">{totalFiltrado} {totalFiltrado !== 1 ? 'transações' : 'transação'} no total</p>
             </div>
-            {loading ? (
-              <p className="text-slate-500 text-sm">Carregando...</p>
-            ) : transacoes.length === 0 ? (
-              <p className="text-slate-500 text-sm">Nenhuma transação ainda.</p>
-            ) : (
-              <>
-              <ul className="divide-y divide-slate-100">
-                {transacoes.map((t) => (
-                  <li key={t.id} className="py-3 flex justify-between items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-800 truncate">{t.descricao}</p>
-                      <p className="text-xs text-slate-500">{t.data}</p>
-                    </div>
-                    <span
-                      className={`font-semibold shrink-0 ${
-                        t.tipo === 'ENTRADA' ? 'text-green-600' : 'text-red-600'
+          </div>
+        </div>
+
+        {/* Grid principal */}
+        <div className="grid lg:grid-cols-5 gap-6">
+
+          {/* Formulário */}
+          <div className="lg:col-span-2">
+            <form
+              onSubmit={adicionar}
+              className="bg-zinc-900/60 border border-white/5 rounded-2xl p-6 space-y-5"
+            >
+              <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Nova Transação</h2>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-500">Descrição</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Salário, Aluguel, Netflix..."
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                  className="w-full bg-zinc-800/80 border border-zinc-700/60 hover:border-zinc-600 focus:border-indigo-500 text-white placeholder-zinc-600 px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-500">Valor</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-medium select-none">R$</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={valorDisplay}
+                    onKeyDown={handleValorKeyDown}
+                    onChange={() => { }}
+                    className="w-full bg-zinc-800/80 border border-zinc-700/60 hover:border-zinc-600 focus:border-indigo-500 text-white pl-10 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all tabular-nums"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-zinc-500">Tipo</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTipo('ENTRADA')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium border transition-all ${tipo === 'ENTRADA'
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-900/30'
+                      : 'bg-zinc-800/60 border-zinc-700/60 text-zinc-400 hover:border-emerald-800 hover:text-emerald-400'
                       }`}
-                    >
-                      {t.tipo === 'ENTRADA' ? '+' : '-'} {formatar(t.valor)}
-                    </span>
-                    <button
-                      onClick={() => deletar(t.id)}
-                      className="text-slate-400 hover:text-red-600 transition shrink-0"
-                      title="Excluir"
-                    >
-                      ✕
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {totalPages > 1 && (
-                <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
-                  <button
-                    onClick={() => { setPage(page - 1); carregar(page - 1) }}
-                    disabled={page === 0}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-zinc-600 text-white border border-zinc-600 hover:bg-zinc-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
                   >
-                    ← Anterior
+                    <RiArrowUpLine className="text-base" />
+                    Entrada
                   </button>
-                  <span className="text-sm text-slate-500">
-                    {page + 1} / {totalPages}
-                  </span>
                   <button
-                    onClick={() => { setPage(page + 1); carregar(page + 1) }}
-                    disabled={page + 1 >= totalPages}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-zinc-600 text-white border border-zinc-600 hover:bg-zinc-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    type="button"
+                    onClick={() => setTipo('SAIDA')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium border transition-all ${tipo === 'SAIDA'
+                      ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-900/30'
+                      : 'bg-zinc-800/60 border-zinc-700/60 text-zinc-400 hover:border-red-800 hover:text-red-400'
+                      }`}
                   >
-                    Próxima →
+                    <RiArrowDownLine className="text-base" />
+                    Saída
                   </button>
                 </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all duration-150 shadow-lg shadow-indigo-900/30"
+              >
+                <RiAddLine className="text-lg" />
+                Adicionar transação
+              </button>
+            </form>
+          </div>
+
+          {/* Lista */}
+          <div className="lg:col-span-3 flex flex-col">
+            <div className="bg-zinc-900/60 border border-white/5 rounded-2xl p-6 flex-1 flex flex-col">
+              <div className="flex justify-between items-center mb-5">
+                <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Histórico</h2>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => exportar('ENTRADA')}
+                    className="flex items-center gap-1.5 text-xs border border-zinc-700/60 text-zinc-400 px-3 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white transition-all"
+                  >
+                    <RiDownload2Line />
+                    Entradas
+                  </button>
+                  <button
+                    onClick={() => exportar('SAIDA')}
+                    className="flex items-center gap-1.5 text-xs border border-zinc-700/60 text-zinc-400 px-3 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white transition-all"
+                  >
+                    <RiDownload2Line />
+                    Saídas
+                  </button>
+                </div>
+              </div>
+
+              {transacoes.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-16 text-zinc-700 space-y-3">
+                  <div className="w-16 h-16 rounded-2xl bg-zinc-800/60 flex items-center justify-center">
+                    <RiWalletLine className="text-3xl text-zinc-600" />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-600">Nenhuma transação ainda</p>
+                  <p className="text-xs text-zinc-700">Adicione sua primeira transação ao lado</p>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col justify-between">
+                  <ul className="space-y-2 animate-fade-in">
+                    {transacoes.map((t) => (
+                      <li
+                        key={t.id}
+                        className="group flex items-center gap-4 p-4 rounded-xl border border-transparent hover:bg-white/[0.03] hover:border-white/5 transition-all"
+                      >
+                        {/* Ícone de tipo */}
+                        <div
+                          className={`shrink-0 w-9 h-9 rounded-xl flex items-center justify-center ${t.tipo === 'ENTRADA'
+                            ? 'bg-emerald-950/80 border border-emerald-900/50'
+                            : 'bg-red-950/80 border border-red-900/50'
+                            }`}
+                        >
+                          {t.tipo === 'ENTRADA'
+                            ? <RiArrowUpLine className="text-emerald-400 text-sm" />
+                            : <RiArrowDownLine className="text-red-400 text-sm" />
+                          }
+                        </div>
+
+                        {/* Descrição e data */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-zinc-200 truncate">{t.descricao}</p>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <RiCalendarLine className="text-zinc-600 text-xs" />
+                            <p className="text-xs text-zinc-600">{t.data}</p>
+                          </div>
+                        </div>
+
+                        {/* Valor */}
+                        <span
+                          className={`text-sm font-semibold shrink-0 tabular-nums ${t.tipo === 'ENTRADA' ? 'text-emerald-400' : 'text-red-400'
+                            }`}
+                        >
+                          {t.tipo === 'ENTRADA' ? '+' : '-'}{fmt(t.valor)}
+                        </span>
+
+                        {/* Deletar */}
+                        <button
+                          onClick={() => deletar(t.id)}
+                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-zinc-700 hover:text-red-400 hover:bg-red-950/60 opacity-0 group-hover:opacity-100 transition-all"
+                          title="Excluir"
+                        >
+                          <RiDeleteBin6Line className="text-sm" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+
+                  {/* Paginação */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
+                      <button
+                        onClick={() => mudarPagina(page - 1)}
+                        disabled={page === 0}
+                        className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg border border-zinc-700/60 text-zinc-400 hover:bg-zinc-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        <RiArrowLeftSLine className="text-base" />
+                        Anterior
+                      </button>
+                      <span className="text-xs text-zinc-600 tabular-nums">
+                        Página {page + 1} de {totalPages}
+                      </span>
+                      <button
+                        onClick={() => mudarPagina(page + 1)}
+                        disabled={page + 1 >= totalPages}
+                        className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg border border-zinc-700/60 text-zinc-400 hover:bg-zinc-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                      >
+                        Próxima
+                        <RiArrowRightSLine className="text-base" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
-              </>
-            )}
+            </div>
           </div>
         </div>
       </main>
