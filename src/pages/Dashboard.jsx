@@ -55,7 +55,7 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const [tRes, sRes] = await Promise.all([
-        api.get(`/api/transacoes/listar?page=${p}&categoria=${categoria}`),
+        api.get(`/api/transacoes/listar-ultimos-doze-meses?page=${p}&categoria=${categoria}`),
         api.get(`/api/transacoes/saldo/${categoria}`),
       ])
       setTransacoes(tRes.data.content)
