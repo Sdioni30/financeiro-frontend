@@ -123,7 +123,7 @@ export default function Login() {
           <p className="text-center text-sm text-zinc-600">
             Não tem conta?{' '}
             <Link to="/register" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
-              Criar conta grátis
+              Criar conta
             </Link>
           </p>
         </div>

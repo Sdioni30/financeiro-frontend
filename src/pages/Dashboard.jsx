@@ -14,6 +14,8 @@ import {
   RiBriefcaseLine,
   RiBarChartBoxLine,
   RiCalendarLine,
+  RiCloseLine,
+  RiFileExcel2Line,
 } from 'react-icons/ri'
 import api from '../api'
 
@@ -33,6 +35,31 @@ export default function Dashboard() {
   const [descricao, setDescricao] = useState('')
   const [valorCentavos, setValorCentavos] = useState(0)
   const [tipo, setTipo] = useState('ENTRADA')
+
+  const [mostrarModalMes, setMostrarModalMes] = useState(false)
+  const [mesAnoEscolhido, setMesAnoEscolhido] = useState('')
+  const [baixandoRelatorioMes, setBaixandoRelatorioMes] = useState(false)
+
+  const ultimosDozeMeses = () => {
+    const meses = []
+    const hoje = new Date()
+    const nomesMeses = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    ]
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+      const mes = d.getMonth() + 1
+      const ano = d.getFullYear()
+      meses.push({
+        valor: `${mes}-${ano}`,
+        label: `${nomesMeses[d.getMonth()]} de ${ano}`,
+        mes,
+        ano,
+      })
+    }
+    return meses
+  }
 
   const valorDisplay = (valorCentavos / 100).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
@@ -110,6 +137,29 @@ export default function Dashboard() {
       : `relatorio-${categoria.toLowerCase()}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const baixarRelatorioDoMes = async (tipoFiltro) => {
+    if (!mesAnoEscolhido) return
+    const [mes, ano] = mesAnoEscolhido.split('-')
+    const params = tipoFiltro ? `&tipo=${tipoFiltro}` : ''
+    setBaixandoRelatorioMes(true)
+    try {
+      const res = await api.get(
+        `/api/transacoes/download/relatorio/historico-por-mes/${categoria}?mes=${mes}&ano=${ano}${params}`,
+        { responseType: 'blob' }
+      )
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = tipoFiltro
+        ? `${tipoFiltro.toLowerCase()}s-${categoria.toLowerCase()}-${mes}-${ano}.xlsx`
+        : `relatorio-${categoria.toLowerCase()}-${mes}-${ano}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setBaixandoRelatorioMes(false)
+    }
   }
 
   const mudarPagina = async (novaPagina) => {
@@ -282,6 +332,16 @@ export default function Dashboard() {
                     <RiDownload2Line />
                     Saídas
                   </button>
+                  <button
+                    onClick={() => {
+                      setMesAnoEscolhido(ultimosDozeMeses()[0].valor)
+                      setMostrarModalMes(true)
+                    }}
+                    className="flex items-center gap-1.5 text-xs border border-zinc-700/60 text-zinc-400 px-3 py-1.5 rounded-lg hover:bg-zinc-800 hover:text-white transition-all"
+                  >
+                    <RiCalendarLine />
+                    Escolha um mês
+                  </button>
                 </div>
               </div>
 
@@ -373,6 +433,70 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Modal: baixar relatório de um mês específico */}
+      {mostrarModalMes && (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          onClick={() => setMostrarModalMes(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-2xl p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center">
+              <h2 className="text-sm font-semibold text-white">Baixar relatório de um mês</h2>
+              <button
+                onClick={() => setMostrarModalMes(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-white/5 transition-all"
+              >
+                <RiCloseLine />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-zinc-500">Mês</label>
+              <select
+                value={mesAnoEscolhido}
+                onChange={(e) => setMesAnoEscolhido(e.target.value)}
+                className="w-full bg-zinc-800/80 border border-zinc-700/60 text-white px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              >
+                {ultimosDozeMeses().map((m) => (
+                  <option key={m.valor} value={m.valor}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                disabled={baixandoRelatorioMes}
+                onClick={() => baixarRelatorioDoMes('ENTRADA')}
+                className="flex items-center justify-center gap-1.5 text-xs border border-zinc-700/60 text-zinc-300 px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-white transition-all disabled:opacity-40"
+              >
+                <RiFileExcel2Line />
+                Entradas
+              </button>
+              <button
+                disabled={baixandoRelatorioMes}
+                onClick={() => baixarRelatorioDoMes('SAIDA')}
+                className="flex items-center justify-center gap-1.5 text-xs border border-zinc-700/60 text-zinc-300 px-3 py-2.5 rounded-xl hover:bg-zinc-800 hover:text-white transition-all disabled:opacity-40"
+              >
+                <RiFileExcel2Line />
+                Saídas
+              </button>
+            </div>
+
+            <button
+              disabled={baixandoRelatorioMes}
+              onClick={() => baixarRelatorioDoMes(null)}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition-all disabled:opacity-40"
+            >
+              <RiFileExcel2Line />
+              {baixandoRelatorioMes ? 'Baixando...' : 'Baixar tudo do mês'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
